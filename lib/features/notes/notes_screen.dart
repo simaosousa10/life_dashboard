@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/constants/app_constants.dart';
 import '../../core/utils/app_error.dart';
 import '../../core/widgets/app_async_value.dart';
 import '../../core/widgets/app_snackbars.dart';
@@ -18,6 +19,7 @@ class NotesScreen extends ConsumerStatefulWidget {
 class _NotesScreenState extends ConsumerState<NotesScreen> {
   final _searchController = TextEditingController();
   String _query = '';
+  bool _reviewOnly = false;
 
   @override
   void dispose() {
@@ -35,13 +37,15 @@ class _NotesScreenState extends ConsumerState<NotesScreen> {
         onRetry: () => ref.invalidate(notesProvider),
         builder: (items) {
           final query = _query.trim().toLowerCase();
-          final filtered = query.isEmpty
-              ? items
-              : items.where((note) {
-                  return note.title.toLowerCase().contains(query) ||
-                      note.content.toLowerCase().contains(query) ||
-                      note.subject.toLowerCase().contains(query);
-                }).toList();
+          final filtered = items.where((note) {
+            final matchesQuery =
+                query.isEmpty ||
+                note.title.toLowerCase().contains(query) ||
+                note.content.toLowerCase().contains(query) ||
+                note.subject.toLowerCase().contains(query);
+            final matchesReview = !_reviewOnly || note.needsReview;
+            return matchesQuery && matchesReview;
+          }).toList();
 
           return RefreshIndicator(
             onRefresh: () async => invalidateUserScopedData(ref),
@@ -66,6 +70,16 @@ class _NotesScreenState extends ConsumerState<NotesScreen> {
                   onChanged: (value) => setState(() => _query = value),
                 ),
                 const SizedBox(height: 16),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: FilterChip(
+                    selected: _reviewOnly,
+                    label: const Text('Para rever'),
+                    avatar: const Icon(Icons.event_repeat_outlined),
+                    onSelected: (value) => setState(() => _reviewOnly = value),
+                  ),
+                ),
+                const SizedBox(height: 12),
                 if (filtered.isEmpty)
                   const EmptyState(
                     icon: Icons.note_alt_outlined,
@@ -103,6 +117,23 @@ class _NotesScreenState extends ConsumerState<NotesScreen> {
                                             context,
                                           ).textTheme.labelLarge,
                                         ),
+                                        if (note.needsReview) ...[
+                                          const SizedBox(height: 4),
+                                          Text(
+                                            note.nextReviewDate == null
+                                                ? 'Precisa de revisao'
+                                                : 'Rever em ${formatDate(note.nextReviewDate)}',
+                                            style: Theme.of(context)
+                                                .textTheme
+                                                .bodySmall
+                                                ?.copyWith(
+                                                  color: Theme.of(
+                                                    context,
+                                                  ).colorScheme.primary,
+                                                  fontWeight: FontWeight.w700,
+                                                ),
+                                          ),
+                                        ],
                                       ],
                                     ),
                                   ),
@@ -196,6 +227,9 @@ class _NoteDialogState extends State<_NoteDialog> {
   late final TextEditingController _titleController;
   late final TextEditingController _contentController;
   late final TextEditingController _subjectController;
+  bool _needsReview = false;
+  DateTime? _nextReviewDate;
+  String? _difficulty;
   bool _saving = false;
   String? _error;
 
@@ -206,6 +240,9 @@ class _NoteDialogState extends State<_NoteDialog> {
     _titleController = TextEditingController(text: note?.title ?? '');
     _contentController = TextEditingController(text: note?.content ?? '');
     _subjectController = TextEditingController(text: note?.subject ?? '');
+    _needsReview = note?.needsReview ?? false;
+    _nextReviewDate = note?.nextReviewDate;
+    _difficulty = note?.difficulty;
   }
 
   @override
@@ -230,6 +267,9 @@ class _NoteDialogState extends State<_NoteDialog> {
           title: _titleController.text,
           content: _contentController.text,
           subject: _subjectController.text,
+          needsReview: _needsReview,
+          nextReviewDate: _needsReview ? _nextReviewDate : null,
+          difficulty: _needsReview ? _difficulty : null,
         ),
       );
       if (mounted) {
@@ -241,6 +281,21 @@ class _NoteDialogState extends State<_NoteDialog> {
       if (mounted) {
         setState(() => _saving = false);
       }
+    }
+  }
+
+  Future<void> _pickReviewDate() async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _nextReviewDate ?? todayDate(),
+      firstDate: DateTime(2020),
+      lastDate: DateTime(2100),
+    );
+    if (picked != null) {
+      setState(() {
+        _needsReview = true;
+        _nextReviewDate = picked;
+      });
     }
   }
 
@@ -276,6 +331,35 @@ class _NoteDialogState extends State<_NoteDialog> {
                 validator: (value) =>
                     (value ?? '').trim().isEmpty ? 'Obrigatorio.' : null,
               ),
+              const SizedBox(height: 12),
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                value: _needsReview,
+                onChanged: (value) => setState(() => _needsReview = value),
+                title: const Text('Preciso rever'),
+              ),
+              if (_needsReview) ...[
+                OutlinedButton.icon(
+                  onPressed: _pickReviewDate,
+                  icon: const Icon(Icons.event_repeat_outlined),
+                  label: Text(
+                    _nextReviewDate == null
+                        ? 'Sem data de revisao'
+                        : 'Rever em ${formatDate(_nextReviewDate)}',
+                  ),
+                ),
+                const SizedBox(height: 12),
+                DropdownButtonFormField<String>(
+                  initialValue: _difficulty,
+                  decoration: const InputDecoration(labelText: 'Dificuldade'),
+                  items: const [
+                    DropdownMenuItem(value: 'facil', child: Text('Facil')),
+                    DropdownMenuItem(value: 'media', child: Text('Media')),
+                    DropdownMenuItem(value: 'dificil', child: Text('Dificil')),
+                  ],
+                  onChanged: (value) => setState(() => _difficulty = value),
+                ),
+              ],
               if (_error != null) ...[
                 const SizedBox(height: 12),
                 Text(

@@ -12,6 +12,9 @@ import '../../data/models/meal_entry.dart';
 import '../../data/models/model_helpers.dart';
 import '../../data/models/water_entry.dart';
 import '../../providers/app_providers.dart';
+import '../water/water_screen.dart';
+import 'activities_screen.dart';
+import 'meals_screen.dart';
 
 class HealthScreen extends ConsumerStatefulWidget {
   const HealthScreen({super.key});
@@ -35,6 +38,8 @@ class _HealthScreenState extends ConsumerState<HealthScreen> {
         child: ListView(
           padding: const EdgeInsets.all(16),
           children: [
+            const _HealthDetailLinks(),
+            const SizedBox(height: 16),
             _WaterSection(
               water: water,
               goalMl: profile?.dailyWaterGoalMl ?? 2000,
@@ -66,6 +71,75 @@ class _HealthScreenState extends ConsumerState<HealthScreen> {
           ],
         ),
       ),
+    );
+  }
+}
+
+class _HealthDetailLinks extends StatelessWidget {
+  const _HealthDetailLinks();
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        children: [
+          _HealthDetailTile(
+            icon: Icons.water_drop_outlined,
+            title: 'Agua',
+            subtitle: 'Historico e ajustes por dia',
+            destination: const WaterScreen(),
+          ),
+          const Divider(height: 1),
+          _HealthDetailTile(
+            icon: Icons.restaurant_outlined,
+            title: 'Refeicoes',
+            subtitle: 'Editar calorias e macros',
+            destination: const MealsScreen(),
+          ),
+          const Divider(height: 1),
+          _HealthDetailTile(
+            icon: Icons.directions_run_outlined,
+            title: 'Atividades',
+            subtitle: 'Treinos, MET e calorias gastas',
+            destination: const ActivitiesScreen(),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _HealthDetailTile extends StatelessWidget {
+  const _HealthDetailTile({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.destination,
+  });
+
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final Widget destination;
+
+  @override
+  Widget build(BuildContext context) {
+    return ListTile(
+      leading: Icon(icon),
+      title: Text(title),
+      subtitle: Text(subtitle),
+      trailing: const Icon(Icons.chevron_right),
+      onTap: () {
+        Navigator.of(context).push(
+          MaterialPageRoute<void>(
+            builder: (_) => Scaffold(
+              appBar: AppBar(title: Text(title)),
+              body: destination,
+            ),
+          ),
+        );
+      },
     );
   }
 }

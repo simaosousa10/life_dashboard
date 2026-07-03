@@ -9,6 +9,7 @@ import '../../core/widgets/app_snackbars.dart';
 import '../../data/models/model_helpers.dart';
 import '../../data/models/user_profile.dart';
 import '../../providers/app_providers.dart';
+import '../habits/widgets/habit_form_dialog.dart';
 import '../habits/widgets/weekly_habits_dashboard.dart';
 
 class ProfileScreen extends ConsumerWidget {
@@ -91,6 +92,13 @@ class ProfileScreen extends ConsumerWidget {
                         ),
                         const Divider(height: 1),
                         _SettingsTile(
+                          icon: Icons.fact_check_outlined,
+                          title: 'Gerir habitos',
+                          subtitle: 'Adicionar novo habito',
+                          onPressed: () => _openHabitDialog(context, ref),
+                        ),
+                        const Divider(height: 1),
+                        _SettingsTile(
                           icon: Icons.logout,
                           title: 'Terminar sessao',
                           subtitle: 'Sair desta conta',
@@ -139,6 +147,18 @@ class ProfileScreen extends ConsumerWidget {
         showErrorSnackBar(context, error);
       }
     }
+  }
+
+  void _openHabitDialog(BuildContext context, WidgetRef ref) {
+    showDialog<void>(
+      context: context,
+      builder: (_) => HabitFormDialog(
+        onSubmit: (input) async {
+          await ref.read(habitsRepositoryProvider).createHabit(input);
+          invalidateHabitData(ref);
+        },
+      ),
+    );
   }
 }
 

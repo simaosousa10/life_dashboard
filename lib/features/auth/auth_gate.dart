@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../providers/app_providers.dart';
 import '../main_shell.dart';
+import '../onboarding/onboarding_screen.dart';
 import 'auth_screen.dart';
 
 class AuthGate extends ConsumerWidget {
@@ -21,7 +22,14 @@ class AuthGate extends ConsumerWidget {
     final user = ref.watch(currentUserProvider);
 
     if (user != null) {
-      return const MainShell();
+      final profile = ref.watch(userProfileProvider);
+      return profile.when(
+        data: (data) =>
+            data == null ? const OnboardingScreen() : const MainShell(),
+        loading: () =>
+            const Scaffold(body: Center(child: CircularProgressIndicator())),
+        error: (_, _) => const OnboardingScreen(),
+      );
     }
 
     return authState.when(
