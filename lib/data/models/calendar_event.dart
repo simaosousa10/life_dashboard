@@ -10,6 +10,9 @@ class CalendarEvent {
     required this.category,
     required this.createdAt,
     this.description,
+    this.startTime,
+    this.endTime,
+    this.location,
   });
 
   final String id;
@@ -17,7 +20,10 @@ class CalendarEvent {
   final String title;
   final String? description;
   final DateTime eventDate;
+  final String? startTime;
+  final String? endTime;
   final String category;
+  final String? location;
   final DateTime createdAt;
 
   factory CalendarEvent.fromMap(Map<String, dynamic> map) {
@@ -27,7 +33,10 @@ class CalendarEvent {
       title: map['title'] as String,
       description: map['description'] as String?,
       eventDate: parseDate(map['event_date']),
+      startTime: map['start_time'] as String?,
+      endTime: map['end_time'] as String?,
       category: map['category'] as String,
+      location: map['location'] as String?,
       createdAt: parseDate(map['created_at']),
     );
   }
@@ -39,25 +48,37 @@ class CalendarEventInput {
     required this.eventDate,
     required this.category,
     this.description,
+    this.startTime,
+    this.endTime,
+    this.location,
   });
 
   final String title;
   final String? description;
   final DateTime eventDate;
+  final String? startTime;
+  final String? endTime;
   final String category;
+  final String? location;
 
   Map<String, dynamic> toMap(String userId) => {
     'user_id': userId,
     'title': title.trim(),
     'description': description,
     'event_date': formatDateKey(eventDate),
+    'start_time': startTime,
+    'end_time': endTime,
     'category': category,
+    'location': location,
   };
 
   Map<String, dynamic> toUpdateMap() => {
     'title': title.trim(),
     'description': description,
     'event_date': formatDateKey(eventDate),
+    'start_time': startTime,
+    'end_time': endTime,
     'category': category,
+    'location': location,
   };
 }

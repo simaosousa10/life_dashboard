@@ -269,7 +269,10 @@ class _EventDialogState extends State<_EventDialog> {
   final _formKey = GlobalKey<FormState>();
   late final TextEditingController _titleController;
   late final TextEditingController _descriptionController;
+  late final TextEditingController _locationController;
   late DateTime _eventDate;
+  String? _startTime;
+  String? _endTime;
   late String _category;
   bool _saving = false;
   String? _error;
@@ -282,7 +285,10 @@ class _EventDialogState extends State<_EventDialog> {
     _descriptionController = TextEditingController(
       text: event?.description ?? '',
     );
+    _locationController = TextEditingController(text: event?.location ?? '');
     _eventDate = event?.eventDate ?? todayDate();
+    _startTime = event?.startTime;
+    _endTime = event?.endTime;
     _category = event?.category ?? AppConstants.eventCategories.first;
   }
 
@@ -290,6 +296,7 @@ class _EventDialogState extends State<_EventDialog> {
   void dispose() {
     _titleController.dispose();
     _descriptionController.dispose();
+    _locationController.dispose();
     super.dispose();
   }
 
@@ -305,8 +312,39 @@ class _EventDialogState extends State<_EventDialog> {
     }
   }
 
+  Future<void> _pickStartTime() async {
+    final picked = await _pickTime(_startTime);
+    if (picked != null) {
+      setState(() => _startTime = _formatTime(picked));
+    }
+  }
+
+  Future<void> _pickEndTime() async {
+    final picked = await _pickTime(_endTime ?? _startTime);
+    if (picked != null) {
+      setState(() => _endTime = _formatTime(picked));
+    }
+  }
+
+  Future<TimeOfDay?> _pickTime(String? value) {
+    return showTimePicker(
+      context: context,
+      initialTime: _parseTime(value) ?? TimeOfDay.now(),
+    );
+  }
+
   Future<void> _save() async {
     if (!_formKey.currentState!.validate()) {
+      return;
+    }
+    if (_startTime == null && _endTime != null) {
+      setState(() => _error = 'Escolhe uma hora de inicio.');
+      return;
+    }
+    if (_startTime != null &&
+        _endTime != null &&
+        _timeToMinutes(_endTime!) <= _timeToMinutes(_startTime!)) {
+      setState(() => _error = 'A hora de fim deve ser posterior ao inicio.');
       return;
     }
     setState(() {
@@ -319,7 +357,10 @@ class _EventDialogState extends State<_EventDialog> {
           title: _titleController.text,
           description: blankToNull(_descriptionController.text),
           eventDate: _eventDate,
+          startTime: _startTime,
+          endTime: _endTime,
           category: _category,
+          location: blankToNull(_locationController.text),
         ),
       );
       if (mounted) {
@@ -356,6 +397,11 @@ class _EventDialogState extends State<_EventDialog> {
                 decoration: const InputDecoration(labelText: 'Descricao'),
               ),
               const SizedBox(height: 12),
+              TextFormField(
+                controller: _locationController,
+                decoration: const InputDecoration(labelText: 'Local'),
+              ),
+              const SizedBox(height: 12),
               DropdownButtonFormField<String>(
                 initialValue: _category,
                 decoration: const InputDecoration(labelText: 'Categoria'),
@@ -375,6 +421,34 @@ class _EventDialogState extends State<_EventDialog> {
                 icon: const Icon(Icons.event_outlined),
                 label: Text(formatDate(_eventDate)),
               ),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: _pickStartTime,
+                      icon: const Icon(Icons.schedule_outlined),
+                      label: Text(_timeButtonLabel(_startTime, 'Inicio')),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: _pickEndTime,
+                      icon: const Icon(Icons.schedule_outlined),
+                      label: Text(_timeButtonLabel(_endTime, 'Fim')),
+                    ),
+                  ),
+                ],
+              ),
+              if (_startTime != null || _endTime != null)
+                TextButton(
+                  onPressed: () => setState(() {
+                    _startTime = null;
+                    _endTime = null;
+                  }),
+                  child: const Text('Remover horas'),
+                ),
               if (_error != null) ...[
                 const SizedBox(height: 12),
                 Text(
@@ -398,6 +472,42 @@ class _EventDialogState extends State<_EventDialog> {
       ],
     );
   }
+}
+
+String _timeButtonLabel(String? value, String emptyLabel) {
+  if (value == null) {
+    return emptyLabel;
+  }
+  return compactTime(value);
+}
+
+String _formatTime(TimeOfDay value) {
+  final hour = value.hour.toString().padLeft(2, '0');
+  final minute = value.minute.toString().padLeft(2, '0');
+  return '$hour:$minute';
+}
+
+TimeOfDay? _parseTime(String? value) {
+  if (value == null) {
+    return null;
+  }
+  final parts = value.split(':');
+  if (parts.length < 2) {
+    return null;
+  }
+  final hour = int.tryParse(parts[0]);
+  final minute = int.tryParse(parts[1]);
+  if (hour == null || minute == null) {
+    return null;
+  }
+  return TimeOfDay(hour: hour, minute: minute);
+}
+
+int _timeToMinutes(String value) {
+  final parts = value.split(':');
+  final hour = int.tryParse(parts.first) ?? 0;
+  final minute = parts.length > 1 ? int.tryParse(parts[1]) ?? 0 : 0;
+  return hour * 60 + minute;
 }
 
 Object? _firstError(List<AsyncValue<Object?>> values) {

@@ -15,7 +15,8 @@ class CalendarRepository {
         .from('calendar_events')
         .select()
         .eq('user_id', _userId)
-        .order('event_date');
+        .order('event_date')
+        .order('start_time', nullsFirst: true);
 
     return rows.map(CalendarEvent.fromMap).toList();
   }
@@ -29,6 +30,7 @@ class CalendarRepository {
         .eq('user_id', _userId)
         .gte('event_date', today.substring(0, 10))
         .order('event_date')
+        .order('start_time', nullsFirst: true)
         .limit(limit);
 
     return rows.map(CalendarEvent.fromMap).toList();

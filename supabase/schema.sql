@@ -103,6 +103,9 @@ create table if not exists public.study_notes (
   title text not null,
   content text not null,
   subject text not null,
+  needs_review boolean not null default false,
+  next_review_date date,
+  difficulty text,
   created_at timestamptz not null default now()
 );
 
@@ -120,8 +123,13 @@ create table if not exists public.calendar_events (
   title text not null,
   description text,
   event_date date not null,
+  start_time time,
+  end_time time,
   category text not null,
-  created_at timestamptz not null default now()
+  location text,
+  created_at timestamptz not null default now(),
+  check (end_time is null or start_time is not null),
+  check (end_time is null or end_time > start_time)
 );
 
 create table if not exists public.meal_entries (

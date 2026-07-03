@@ -102,8 +102,8 @@ class DayScheduleBottomSheet extends StatelessWidget {
                   return DayAgendaItemCard(
                     title: event.title,
                     category: event.category,
-                    description: event.description,
-                    time: 'Dia inteiro',
+                    description: _eventDescription(event),
+                    time: _eventTime(event),
                     icon: Icons.event_available_outlined,
                     trailing: PopupMenuButton<String>(
                       onSelected: (value) {
@@ -220,6 +220,24 @@ class _DayEmptyState extends StatelessWidget {
       ),
     );
   }
+}
+
+String? _eventDescription(CalendarEvent event) {
+  final parts = <String>[
+    if (event.description != null) event.description!,
+    if (event.location != null) event.location!,
+  ];
+  return parts.isEmpty ? null : parts.join(' - ');
+}
+
+String _eventTime(CalendarEvent event) {
+  if (event.startTime == null) {
+    return 'Dia inteiro';
+  }
+  if (event.endTime == null) {
+    return compactTime(event.startTime!);
+  }
+  return '${compactTime(event.startTime!)} - ${compactTime(event.endTime!)}';
 }
 
 int _timeToMinutes(String value) {
