@@ -2,6 +2,8 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../core/constants/app_constants.dart';
 import '../models/recurring_task.dart';
+import '../models/recurring_task_exception.dart';
+import '../models/todo_item.dart';
 import 'repository_utils.dart';
 
 class RecurringTasksRepository {
@@ -42,30 +44,144 @@ class RecurringTasksRepository {
         .eq('user_id', _userId);
   }
 
+  Future<List<RecurringTaskException>> listExceptionsForDate(
+    DateTime date,
+  ) async {
+    final dateKey = formatDateKey(date);
+    final rows = await _client
+        .from('recurring_task_exceptions')
+        .select()
+        .eq('user_id', _userId)
+        .eq('date', dateKey);
+
+    return rows.map(RecurringTaskException.fromMap).toList();
+  }
+
+  Future<List<RecurringTaskException>> listRescheduledToDate(
+    DateTime date,
+  ) async {
+    final dateKey = formatDateKey(date);
+    final rows = await _client
+        .from('recurring_task_exceptions')
+        .select()
+        .eq('user_id', _userId)
+        .eq('new_due_date', dateKey);
+
+    return rows.map(RecurringTaskException.fromMap).toList();
+  }
+
+  Future<void> skipOccurrence({
+    required String recurringTaskId,
+    required DateTime date,
+  }) async {
+    final dateKey = formatDateKey(date);
+    await _client
+        .from('recurring_task_exceptions')
+        .upsert(
+          RecurringTaskExceptionInput(
+            recurringTaskId: recurringTaskId,
+            date: date,
+            exceptionType: RecurringTaskExceptionType.skip,
+          ).toMap(_userId),
+          onConflict: 'user_id,recurring_task_id,date',
+        );
+
+    await _client
+        .from('todos')
+        .delete()
+        .eq('user_id', _userId)
+        .eq('recurring_task_id', recurringTaskId)
+        .eq('due_date', dateKey);
+  }
+
+  Future<void> rescheduleOccurrence({
+    required TodoItem todo,
+    required DateTime newDueDate,
+    required String? newTime,
+  }) async {
+    final recurringTaskId = todo.recurringTaskId;
+    final originalDate = todo.dueDate;
+    if (recurringTaskId == null || originalDate == null) {
+      return;
+    }
+
+    await _client
+        .from('recurring_task_exceptions')
+        .upsert(
+          RecurringTaskExceptionInput(
+            recurringTaskId: recurringTaskId,
+            date: originalDate,
+            exceptionType: RecurringTaskExceptionType.reschedule,
+            newDueDate: newDueDate,
+            newTime: newTime,
+          ).toMap(_userId),
+          onConflict: 'user_id,recurring_task_id,date',
+        );
+
+    await _client
+        .from('todos')
+        .update({'due_date': formatDateKey(newDueDate), 'due_time': newTime})
+        .eq('id', todo.id)
+        .eq('user_id', _userId);
+  }
+
   Future<void> generateTasksForDate(DateTime date) async {
     final day = DateTime(date.year, date.month, date.day);
     final dateKey = formatDateKey(day);
     final recurringTasks = await list();
-    final applicable = recurringTasks
-        .where((task) => task.appliesTo(day))
-        .toList();
+    final exceptions = await listExceptionsForDate(day);
+    final rescheduledToDate = await listRescheduledToDate(day);
+    final exceptionsByTask = {
+      for (final exception in exceptions) exception.recurringTaskId: exception,
+    };
+    final tasksById = {for (final task in recurringTasks) task.id: task};
+    final applicable = recurringTasks.where((task) {
+      if (!task.appliesTo(day)) {
+        return false;
+      }
+      final exception = exceptionsByTask[task.id];
+      return exception == null ||
+          exception.exceptionType == RecurringTaskExceptionType.modified;
+    }).toList();
 
-    if (applicable.isEmpty) {
+    if (applicable.isEmpty && rescheduledToDate.isEmpty) {
       return;
     }
 
     final rows = applicable.map((task) {
+      final exception = exceptionsByTask[task.id];
       return {
         'user_id': _userId,
         'recurring_task_id': task.id,
         'title': task.title,
         'description': task.description,
         'due_date': dateKey,
-        'due_time': task.time,
+        'due_time': exception?.newTime ?? task.time,
         'priority': task.priority,
         'is_completed': false,
       };
     }).toList();
+
+    for (final exception in rescheduledToDate) {
+      if (exception.exceptionType != RecurringTaskExceptionType.reschedule ||
+          exception.newDueDate == null) {
+        continue;
+      }
+      final task = tasksById[exception.recurringTaskId];
+      if (task == null) {
+        continue;
+      }
+      rows.add({
+        'user_id': _userId,
+        'recurring_task_id': task.id,
+        'title': task.title,
+        'description': task.description,
+        'due_date': formatDateKey(exception.newDueDate!),
+        'due_time': exception.newTime ?? task.time,
+        'priority': task.priority,
+        'is_completed': false,
+      });
+    }
 
     await _client
         .from('todos')

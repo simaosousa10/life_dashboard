@@ -3,11 +3,15 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../core/constants/app_constants.dart';
 import '../../core/utils/app_error.dart';
 import '../../core/widgets/app_async_value.dart';
 import '../../core/widgets/app_snackbars.dart';
+import '../../data/models/app_category.dart';
+import '../../data/models/habit.dart';
 import '../../data/models/model_helpers.dart';
 import '../../data/models/user_profile.dart';
+import '../../data/models/weekly_review.dart';
 import '../../providers/app_providers.dart';
 import '../habits/widgets/habit_form_dialog.dart';
 import '../habits/widgets/weekly_habits_dashboard.dart';
@@ -99,6 +103,27 @@ class ProfileScreen extends ConsumerWidget {
                         ),
                         const Divider(height: 1),
                         _SettingsTile(
+                          icon: Icons.auto_awesome_motion_outlined,
+                          title: 'Adicionar template',
+                          subtitle: 'Rotina manha, noite, estudo ou saude',
+                          onPressed: () => _openTemplateDialog(context, ref),
+                        ),
+                        const Divider(height: 1),
+                        _SettingsTile(
+                          icon: Icons.category_outlined,
+                          title: 'Gerir categorias',
+                          subtitle: 'Categorias pessoais simples',
+                          onPressed: () => _openCategoriesDialog(context),
+                        ),
+                        const Divider(height: 1),
+                        _SettingsTile(
+                          icon: Icons.insights_outlined,
+                          title: 'Ver revisao semanal',
+                          subtitle: 'Tarefas, agua, calorias e check-ins',
+                          onPressed: () => _openWeeklyReview(context),
+                        ),
+                        const Divider(height: 1),
+                        _SettingsTile(
                           icon: Icons.logout,
                           title: 'Terminar sessao',
                           subtitle: 'Sair desta conta',
@@ -160,6 +185,592 @@ class ProfileScreen extends ConsumerWidget {
       ),
     );
   }
+
+  void _openWeeklyReview(BuildContext context) {
+    showDialog<void>(
+      context: context,
+      builder: (_) => const _WeeklyReviewDialog(),
+    );
+  }
+
+  void _openTemplateDialog(BuildContext context, WidgetRef ref) {
+    showDialog<void>(
+      context: context,
+      builder: (_) => _HabitTemplateDialog(
+        onSubmit: (template) async {
+          final repository = ref.read(habitsRepositoryProvider);
+          for (final input in template.toHabitInputs()) {
+            await repository.createHabit(input);
+          }
+          invalidateHabitData(ref);
+        },
+      ),
+    );
+  }
+
+  void _openCategoriesDialog(BuildContext context) {
+    showDialog<void>(
+      context: context,
+      builder: (_) => const _CategoriesDialog(),
+    );
+  }
+}
+
+class _CategoriesDialog extends ConsumerStatefulWidget {
+  const _CategoriesDialog();
+
+  @override
+  ConsumerState<_CategoriesDialog> createState() => _CategoriesDialogState();
+}
+
+class _CategoriesDialogState extends ConsumerState<_CategoriesDialog> {
+  final _nameController = TextEditingController();
+  final _colorController = TextEditingController(text: '#FFA726');
+  final _iconController = TextEditingController();
+  bool _saving = false;
+  String? _error;
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _colorController.dispose();
+    _iconController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _create() async {
+    final name = _nameController.text.trim();
+    if (name.isEmpty) {
+      setState(() => _error = 'Nome obrigatorio.');
+      return;
+    }
+
+    setState(() {
+      _saving = true;
+      _error = null;
+    });
+
+    try {
+      await ref
+          .read(categoriesRepositoryProvider)
+          .create(
+            AppCategoryInput(
+              name: name,
+              color: blankToNull(_colorController.text),
+              icon: blankToNull(_iconController.text),
+            ),
+          );
+      _nameController.clear();
+      _iconController.clear();
+      ref.invalidate(categoriesProvider);
+    } catch (error) {
+      setState(() => _error = friendlyErrorMessage(error));
+    } finally {
+      if (mounted) {
+        setState(() => _saving = false);
+      }
+    }
+  }
+
+  Future<void> _delete(AppCategory category) async {
+    try {
+      await ref.read(categoriesRepositoryProvider).delete(category.id);
+      ref.invalidate(categoriesProvider);
+    } catch (error) {
+      if (mounted) {
+        showErrorSnackBar(context, error);
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final categories = ref.watch(categoriesProvider);
+
+    return AlertDialog(
+      title: const Text('Categorias'),
+      content: SizedBox(
+        width: 520,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  flex: 2,
+                  child: TextField(
+                    controller: _nameController,
+                    decoration: const InputDecoration(labelText: 'Nome'),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: TextField(
+                    controller: _colorController,
+                    decoration: const InputDecoration(labelText: 'Cor'),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: TextField(
+                    controller: _iconController,
+                    decoration: const InputDecoration(labelText: 'Icone'),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Align(
+              alignment: Alignment.centerRight,
+              child: FilledButton.icon(
+                onPressed: _saving ? null : _create,
+                icon: const Icon(Icons.add),
+                label: Text(_saving ? 'A criar...' : 'Criar'),
+              ),
+            ),
+            if (_error != null) ...[
+              const SizedBox(height: 8),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  _error!,
+                  style: TextStyle(color: Theme.of(context).colorScheme.error),
+                ),
+              ),
+            ],
+            const SizedBox(height: 12),
+            SizedBox(
+              height: 280,
+              child: AppAsyncValue(
+                value: categories,
+                onRetry: () => ref.invalidate(categoriesProvider),
+                builder: (items) {
+                  if (items.isEmpty) {
+                    return const Center(child: Text('Sem categorias.'));
+                  }
+                  return ListView.separated(
+                    shrinkWrap: true,
+                    itemCount: items.length,
+                    separatorBuilder: (context, index) =>
+                        const Divider(height: 1),
+                    itemBuilder: (context, index) {
+                      final category = items[index];
+                      return ListTile(
+                        dense: true,
+                        contentPadding: EdgeInsets.zero,
+                        leading: const Icon(Icons.label_outline),
+                        title: Text(category.name),
+                        subtitle: Text(
+                          [
+                            if (category.color != null) category.color!,
+                            if (category.icon != null) category.icon!,
+                          ].join(' - '),
+                        ),
+                        trailing: IconButton(
+                          tooltip: 'Apagar categoria',
+                          onPressed: () => _delete(category),
+                          icon: const Icon(Icons.delete_outline),
+                        ),
+                      );
+                    },
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Fechar'),
+        ),
+      ],
+    );
+  }
+}
+
+class _HabitTemplateDialog extends StatefulWidget {
+  const _HabitTemplateDialog({required this.onSubmit});
+
+  final Future<void> Function(_HabitTemplate template) onSubmit;
+
+  @override
+  State<_HabitTemplateDialog> createState() => _HabitTemplateDialogState();
+}
+
+class _HabitTemplateDialogState extends State<_HabitTemplateDialog> {
+  var _selected = _habitTemplates.first;
+  bool _saving = false;
+  String? _error;
+
+  Future<void> _save() async {
+    setState(() {
+      _saving = true;
+      _error = null;
+    });
+
+    try {
+      await widget.onSubmit(_selected);
+      if (mounted) {
+        Navigator.of(context).pop();
+      }
+    } catch (error) {
+      setState(() => _error = friendlyErrorMessage(error));
+    } finally {
+      if (mounted) {
+        setState(() => _saving = false);
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Adicionar template'),
+      content: SizedBox(
+        width: 520,
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              for (final template in _habitTemplates)
+                ListTile(
+                  selected: template == _selected,
+                  leading: Icon(
+                    template == _selected
+                        ? Icons.radio_button_checked
+                        : Icons.radio_button_unchecked,
+                  ),
+                  title: Text(template.title),
+                  subtitle: Text(template.description),
+                  onTap: () => setState(() => _selected = template),
+                ),
+              const SizedBox(height: 8),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    for (final habit in _selected.habits)
+                      Chip(
+                        label: Text(habit.title),
+                        visualDensity: VisualDensity.compact,
+                      ),
+                  ],
+                ),
+              ),
+              if (_error != null) ...[
+                const SizedBox(height: 10),
+                Text(
+                  _error!,
+                  style: TextStyle(color: Theme.of(context).colorScheme.error),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: _saving ? null : () => Navigator.of(context).pop(),
+          child: const Text('Cancelar'),
+        ),
+        FilledButton(
+          onPressed: _saving ? null : _save,
+          child: Text(_saving ? 'A criar...' : 'Criar habitos'),
+        ),
+      ],
+    );
+  }
+}
+
+class _HabitTemplate {
+  const _HabitTemplate({
+    required this.title,
+    required this.description,
+    required this.habits,
+  });
+
+  final String title;
+  final String description;
+  final List<_HabitTemplateItem> habits;
+
+  List<HabitInput> toHabitInputs() {
+    final today = todayDate();
+    return habits
+        .map(
+          (habit) => HabitInput(
+            title: habit.title,
+            description: null,
+            category: habit.category,
+            targetType: habit.targetType,
+            targetValue: habit.targetValue,
+            targetUnit: habit.targetUnit,
+            weekdays: const [1, 2, 3, 4, 5, 6, 7],
+            startDate: today,
+            isActive: true,
+          ),
+        )
+        .toList();
+  }
+}
+
+class _HabitTemplateItem {
+  const _HabitTemplateItem({
+    required this.title,
+    required this.category,
+    this.targetType = HabitTargetType.boolean,
+    this.targetValue,
+    this.targetUnit,
+  });
+
+  final String title;
+  final String category;
+  final HabitTargetType targetType;
+  final double? targetValue;
+  final String? targetUnit;
+}
+
+const _habitTemplates = [
+  _HabitTemplate(
+    title: 'Rotina manha',
+    description: 'Arranque basico para preparar o dia.',
+    habits: [
+      _HabitTemplateItem(title: 'Acordar', category: 'rotina'),
+      _HabitTemplateItem(title: 'Lavar dentes', category: 'rotina'),
+      _HabitTemplateItem(
+        title: 'Beber agua',
+        category: 'saude',
+        targetType: HabitTargetType.quantity,
+        targetValue: 500,
+        targetUnit: 'ml',
+      ),
+      _HabitTemplateItem(
+        title: 'Ler 20 min',
+        category: 'estudo',
+        targetType: HabitTargetType.duration,
+        targetValue: 20,
+        targetUnit: 'min',
+      ),
+    ],
+  ),
+  _HabitTemplate(
+    title: 'Rotina noite',
+    description: 'Fechar o dia com menos friccao.',
+    habits: [
+      _HabitTemplateItem(title: 'Preparar roupa/mochila', category: 'rotina'),
+      _HabitTemplateItem(title: 'Lavar dentes', category: 'rotina'),
+      _HabitTemplateItem(
+        title: 'Leitura leve',
+        category: 'pessoal',
+        targetType: HabitTargetType.duration,
+        targetValue: 15,
+        targetUnit: 'min',
+      ),
+      _HabitTemplateItem(title: 'Telemovel fora da cama', category: 'saude'),
+    ],
+  ),
+  _HabitTemplate(
+    title: 'Estudo',
+    description: 'Base simples para estudo e programacao.',
+    habits: [
+      _HabitTemplateItem(
+        title: 'Deep Work programacao',
+        category: 'programacao',
+        targetType: HabitTargetType.duration,
+        targetValue: 120,
+        targetUnit: 'min',
+      ),
+      _HabitTemplateItem(title: 'Rever UC', category: 'universidade'),
+      _HabitTemplateItem(title: 'Trabalhos universidade', category: 'estudo'),
+      _HabitTemplateItem(
+        title: 'Revisao leve',
+        category: 'estudo',
+        targetType: HabitTargetType.duration,
+        targetValue: 20,
+        targetUnit: 'min',
+      ),
+    ],
+  ),
+  _HabitTemplate(
+    title: 'Saude',
+    description: 'Rotina curta para registar saude diaria.',
+    habits: [
+      _HabitTemplateItem(
+        title: 'Beber agua',
+        category: 'saude',
+        targetType: HabitTargetType.quantity,
+        targetValue: 2000,
+        targetUnit: 'ml',
+      ),
+      _HabitTemplateItem(
+        title: 'Caminhar',
+        category: 'saude',
+        targetType: HabitTargetType.duration,
+        targetValue: 30,
+        targetUnit: 'min',
+      ),
+      _HabitTemplateItem(title: 'Registar refeicao', category: 'saude'),
+      _HabitTemplateItem(title: 'Exercicio', category: 'saude'),
+    ],
+  ),
+];
+
+class _WeeklyReviewDialog extends ConsumerWidget {
+  const _WeeklyReviewDialog();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final review = ref.watch(weeklyReviewProvider);
+
+    return AlertDialog(
+      title: const Text('Revisao semanal'),
+      content: SizedBox(
+        width: 520,
+        child: AppAsyncValue(
+          value: review,
+          onRetry: () => ref.invalidate(weeklyReviewProvider),
+          builder: (data) => _WeeklyReviewContent(data: data),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Fechar'),
+        ),
+      ],
+    );
+  }
+}
+
+class _WeeklyReviewContent extends StatelessWidget {
+  const _WeeklyReviewContent({required this.data});
+
+  final WeeklyReviewData data;
+
+  @override
+  Widget build(BuildContext context) {
+    final bestHabit = data.bestHabit;
+    final weakestHabit = data.weakestHabit;
+
+    return SingleChildScrollView(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            '${formatDate(data.weekStart)} - ${formatDate(data.weekEnd)}',
+            style: Theme.of(context).textTheme.bodyMedium,
+          ),
+          const SizedBox(height: 14),
+          GridView.count(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            crossAxisCount: 2,
+            childAspectRatio: 2.25,
+            crossAxisSpacing: 8,
+            mainAxisSpacing: 8,
+            children: [
+              _ReviewMetric(
+                label: 'Habitos',
+                value: '${(data.habitSummary.completionRate * 100).round()}%',
+              ),
+              _ReviewMetric(
+                label: 'Tarefas feitas',
+                value: '${data.completedTasks}',
+              ),
+              _ReviewMetric(label: 'Vencidas', value: '${data.overdueTasks}'),
+              _ReviewMetric(
+                label: 'Agua media',
+                value: '${data.averageWaterMl} ml',
+              ),
+              _ReviewMetric(
+                label: 'Ingeridas',
+                value: '${data.caloriesIn} kcal',
+              ),
+              _ReviewMetric(label: 'Gastas', value: '${data.caloriesOut} kcal'),
+              _ReviewMetric(
+                label: 'Check-ins',
+                value: '${data.dailyReviewCount}/7',
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          Text('Destaques', style: Theme.of(context).textTheme.titleSmall),
+          const SizedBox(height: 8),
+          _HabitHighlight(
+            label: 'Mais consistente',
+            value: bestHabit == null
+                ? 'Sem dados suficientes'
+                : _habitReviewText(bestHabit),
+          ),
+          const SizedBox(height: 8),
+          _HabitHighlight(
+            label: 'Precisa de atencao',
+            value: weakestHabit == null
+                ? 'Sem dados suficientes'
+                : _habitReviewText(weakestHabit),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ReviewMetric extends StatelessWidget {
+  const _ReviewMetric({required this.label, required this.value});
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Text(
+              value,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(
+                context,
+              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
+            ),
+            const SizedBox(height: 2),
+            Text(label, maxLines: 1, overflow: TextOverflow.ellipsis),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _HabitHighlight extends StatelessWidget {
+  const _HabitHighlight({required this.label, required this.value});
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return ListTile(
+      dense: true,
+      contentPadding: EdgeInsets.zero,
+      title: Text(label),
+      subtitle: Text(value),
+    );
+  }
+}
+
+String _habitReviewText(WeeklyHabitStat stat) {
+  return '${stat.habit.title}: ${stat.completedDays}/${stat.plannedDays} dias, '
+      '${(stat.completionRate * 100).round()}%, streak ${stat.currentStreak}';
 }
 
 class _ProfileHeader extends StatelessWidget {

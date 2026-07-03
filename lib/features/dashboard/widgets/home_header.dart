@@ -7,12 +7,14 @@ class HomeHeader extends StatelessWidget {
     required this.displayName,
     required this.date,
     required this.onProfileTap,
+    this.onSearchTap,
     super.key,
   });
 
   final String displayName;
   final DateTime date;
   final VoidCallback onProfileTap;
+  final VoidCallback? onSearchTap;
 
   @override
   Widget build(BuildContext context) {
@@ -51,6 +53,16 @@ class HomeHeader extends StatelessWidget {
             ],
           ),
         ),
+        IconButton.filledTonal(
+          tooltip: 'Pesquisar',
+          onPressed: onSearchTap,
+          icon: const Icon(Icons.search),
+          style: IconButton.styleFrom(
+            backgroundColor: Colors.white.withValues(alpha: 0.10),
+            foregroundColor: Colors.white,
+          ),
+        ),
+        const SizedBox(width: 8),
         IconButton.filledTonal(
           tooltip: 'Perfil',
           onPressed: onProfileTap,

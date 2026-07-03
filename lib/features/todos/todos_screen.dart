@@ -138,16 +138,99 @@ class TodosScreen extends ConsumerWidget {
     TodoItem item,
   ) async {
     if (item.recurringTaskId != null) {
-      showSuccessSnackBar(
-        context,
-        'Esta tarefa e gerada por recorrencia. Desativa a recorrencia para remover.',
-      );
+      _openRecurringOccurrenceDialog(context, ref, item);
       return;
     }
 
     try {
       await ref.read(todosRepositoryProvider).delete(item.id);
       invalidateDashboardData(ref);
+    } catch (error) {
+      if (context.mounted) {
+        showErrorSnackBar(context, error);
+      }
+    }
+  }
+
+  void _openRecurringOccurrenceDialog(
+    BuildContext context,
+    WidgetRef ref,
+    TodoItem item,
+  ) {
+    showDialog<void>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Ocorrencia recorrente'),
+        content: const Text(
+          'Queres aplicar a alteracao apenas a esta ocorrencia?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Cancelar'),
+          ),
+          TextButton(
+            onPressed: item.dueDate == null
+                ? null
+                : () async {
+                    Navigator.of(context).pop();
+                    await _skipRecurringOccurrence(context, ref, item);
+                  },
+            child: const Text('Saltar'),
+          ),
+          FilledButton(
+            onPressed: item.dueDate == null
+                ? null
+                : () {
+                    Navigator.of(context).pop();
+                    _openRescheduleDialog(context, ref, item);
+                  },
+            child: const Text('Adiar'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _openRescheduleDialog(
+    BuildContext context,
+    WidgetRef ref,
+    TodoItem item,
+  ) {
+    showDialog<void>(
+      context: context,
+      builder: (_) => _RescheduleOccurrenceDialog(
+        todo: item,
+        onSubmit: (newDate, newTime) async {
+          await ref
+              .read(recurringTasksRepositoryProvider)
+              .rescheduleOccurrence(
+                todo: item,
+                newDueDate: newDate,
+                newTime: newTime,
+              );
+          invalidateDashboardData(ref);
+        },
+      ),
+    );
+  }
+
+  Future<void> _skipRecurringOccurrence(
+    BuildContext context,
+    WidgetRef ref,
+    TodoItem item,
+  ) async {
+    try {
+      await ref
+          .read(recurringTasksRepositoryProvider)
+          .skipOccurrence(
+            recurringTaskId: item.recurringTaskId!,
+            date: item.dueDate!,
+          );
+      invalidateDashboardData(ref);
+      if (context.mounted) {
+        showSuccessSnackBar(context, 'Ocorrencia saltada.');
+      }
     } catch (error) {
       if (context.mounted) {
         showErrorSnackBar(context, error);
@@ -309,6 +392,122 @@ class _RecurringTaskCard extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+class _RescheduleOccurrenceDialog extends StatefulWidget {
+  const _RescheduleOccurrenceDialog({
+    required this.todo,
+    required this.onSubmit,
+  });
+
+  final TodoItem todo;
+  final Future<void> Function(DateTime newDate, String? newTime) onSubmit;
+
+  @override
+  State<_RescheduleOccurrenceDialog> createState() =>
+      _RescheduleOccurrenceDialogState();
+}
+
+class _RescheduleOccurrenceDialogState
+    extends State<_RescheduleOccurrenceDialog> {
+  late DateTime _date;
+  String? _time;
+  bool _saving = false;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _date = widget.todo.dueDate ?? todayDate();
+    _time = widget.todo.dueTime;
+  }
+
+  Future<void> _pickDate() async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _date,
+      firstDate: DateTime(2020),
+      lastDate: DateTime(2100),
+    );
+    if (picked != null) {
+      setState(() => _date = picked);
+    }
+  }
+
+  Future<void> _pickTime() async {
+    final picked = await showTimePicker(
+      context: context,
+      initialTime: _parseTime(_time) ?? TimeOfDay.now(),
+    );
+    if (picked != null) {
+      setState(() => _time = _formatTime(picked));
+    }
+  }
+
+  Future<void> _save() async {
+    setState(() {
+      _saving = true;
+      _error = null;
+    });
+    try {
+      await widget.onSubmit(_date, _time);
+      if (mounted) {
+        Navigator.of(context).pop();
+      }
+    } catch (error) {
+      setState(() => _error = friendlyErrorMessage(error));
+    } finally {
+      if (mounted) {
+        setState(() => _saving = false);
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Adiar ocorrencia'),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          OutlinedButton.icon(
+            onPressed: _pickDate,
+            icon: const Icon(Icons.event_outlined),
+            label: Text(formatDate(_date)),
+          ),
+          const SizedBox(height: 8),
+          OutlinedButton.icon(
+            onPressed: _pickTime,
+            icon: const Icon(Icons.schedule_outlined),
+            label: Text(_timeButtonLabel(_time)),
+          ),
+          if (_time != null)
+            TextButton(
+              onPressed: () => setState(() => _time = null),
+              child: const Text('Remover hora'),
+            ),
+          if (_error != null) ...[
+            const SizedBox(height: 12),
+            Text(
+              _error!,
+              style: TextStyle(color: Theme.of(context).colorScheme.error),
+            ),
+          ],
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: _saving ? null : () => Navigator.of(context).pop(),
+          child: const Text('Cancelar'),
+        ),
+        FilledButton(
+          onPressed: _saving ? null : _save,
+          child: const Text('Guardar'),
+        ),
+      ],
     );
   }
 }
