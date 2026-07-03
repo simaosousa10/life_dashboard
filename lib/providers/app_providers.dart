@@ -5,6 +5,7 @@ import '../core/constants/app_constants.dart';
 import '../data/models/activity_entry.dart';
 import '../data/models/calendar_event.dart';
 import '../data/models/dashboard_summary.dart';
+import '../data/models/day_plan.dart';
 import '../data/models/habit.dart';
 import '../data/models/home_dashboard_data.dart';
 import '../data/models/meal_entry.dart';
@@ -200,6 +201,86 @@ final userProfileProvider = FutureProvider.autoDispose<UserProfile?>((ref) {
   return ref.watch(profileRepositoryProvider).getProfile();
 });
 
+final dayPlanProvider = FutureProvider.autoDispose.family<DayPlanData, String>((
+  ref,
+  dateKey,
+) async {
+  final date = DateTime.parse(dateKey);
+  final user = ref.watch(currentUserProvider);
+
+  if (user == null) {
+    return DayPlanData(
+      displayName: 'Utilizador',
+      date: date,
+      profile: null,
+      scheduleBlocks: const [],
+      events: const [],
+      todos: const [],
+      habits: const [],
+      waterEntries: const [],
+      mealEntries: const [],
+      activityEntries: const [],
+      timelineItems: const [],
+    );
+  }
+
+  await ref.watch(recurringTasksRepositoryProvider).generateTasksForDate(date);
+
+  final results = await Future.wait<Object?>([
+    ref.watch(profileRepositoryProvider).getProfile(),
+    ref.watch(scheduleRepositoryProvider).list(),
+    ref.watch(todosRepositoryProvider).list(),
+    ref.watch(calendarRepositoryProvider).list(),
+    ref.watch(waterRepositoryProvider).listByDate(dateKey),
+    ref.watch(mealsRepositoryProvider).listByDate(dateKey),
+    ref.watch(activitiesRepositoryProvider).listByDate(dateKey),
+    ref.watch(habitsRepositoryProvider).getTodayEntries(date),
+  ]);
+
+  final profile = results[0] as UserProfile?;
+  final scheduleBlocks = results[1] as List<ScheduleBlock>;
+  final todos = results[2] as List<TodoItem>;
+  final events = results[3] as List<CalendarEvent>;
+  final waterEntries = results[4] as List<WaterEntry>;
+  final mealEntries = results[5] as List<MealEntry>;
+  final activityEntries = results[6] as List<ActivityEntry>;
+  final habitEntries = results[7] as List<TodayHabitEntry>;
+
+  final dayTodos = todos
+      .where(
+        (todo) =>
+            todo.dueDate != null && formatDateKey(todo.dueDate!) == dateKey,
+      )
+      .toList();
+  final dayEvents = events
+      .where((event) => formatDateKey(event.eventDate) == dateKey)
+      .toList();
+  final timelineItems = buildTodayTimelineItems(
+    date: date,
+    scheduleBlocks: scheduleBlocks,
+    events: dayEvents,
+    todos: dayTodos,
+    habits: habitEntries,
+  );
+
+  final displayName =
+      profile?.displayName ?? user.email?.split('@').first ?? 'Utilizador';
+
+  return DayPlanData(
+    displayName: displayName,
+    date: date,
+    profile: profile,
+    scheduleBlocks: scheduleBlocks,
+    events: dayEvents,
+    todos: dayTodos,
+    habits: habitEntries,
+    waterEntries: waterEntries,
+    mealEntries: mealEntries,
+    activityEntries: activityEntries,
+    timelineItems: timelineItems,
+  );
+});
+
 final timelineClockProvider = StreamProvider.autoDispose<DateTime>((
   ref,
 ) async* {
@@ -371,72 +452,18 @@ final homeTimelineProvider = FutureProvider.autoDispose<TodayTimelineData>((
 ) async {
   final today = todayDate();
   final dateKey = formatDateKey(today);
-  final user = ref.watch(currentUserProvider);
-
-  if (user == null) {
-    return TodayTimelineData(
-      displayName: 'Utilizador',
-      date: today,
-      items: const [],
-      completedTasks: 0,
-      totalTasks: 0,
-      waterMl: 0,
-      waterGoalMl: 2000,
-      caloriesIn: 0,
-      caloriesOut: 0,
-    );
-  }
-
-  await ref.watch(recurringTasksRepositoryProvider).generateTasksForDate(today);
-
-  final results = await Future.wait<Object?>([
-    ref.watch(profileRepositoryProvider).getProfile(),
-    ref.watch(scheduleRepositoryProvider).list(),
-    ref.watch(todosRepositoryProvider).list(),
-    ref.watch(calendarRepositoryProvider).list(),
-    ref.watch(waterRepositoryProvider).listByDate(dateKey),
-    ref.watch(mealsRepositoryProvider).listByDate(dateKey),
-    ref.watch(activitiesRepositoryProvider).listByDate(dateKey),
-  ]);
-
-  final profile = results[0] as UserProfile?;
-  final scheduleBlocks = results[1] as List<ScheduleBlock>;
-  final todos = results[2] as List<TodoItem>;
-  final events = results[3] as List<CalendarEvent>;
-  final waterEntries = results[4] as List<WaterEntry>;
-  final mealEntries = results[5] as List<MealEntry>;
-  final activityEntries = results[6] as List<ActivityEntry>;
-
-  final todayTodos = todos
-      .where(
-        (todo) =>
-            todo.dueDate != null && formatDateKey(todo.dueDate!) == dateKey,
-      )
-      .toList();
-
-  final items = buildTodayTimelineItems(
-    date: today,
-    scheduleBlocks: scheduleBlocks,
-    events: events,
-    todos: todos,
-  );
-
-  final displayName =
-      profile?.displayName ?? user.email?.split('@').first ?? 'Utilizador';
+  final plan = await ref.watch(dayPlanProvider(dateKey).future);
 
   return TodayTimelineData(
-    displayName: displayName,
+    displayName: plan.displayName,
     date: today,
-    items: items,
-    completedTasks: todayTodos.where((todo) => todo.isCompleted).length,
-    totalTasks: todayTodos.length,
-    waterMl: waterEntries.fold(0, (sum, entry) => sum + entry.amountMl),
-    waterGoalMl: profile?.dailyWaterGoalMl ?? 2000,
-    caloriesIn: mealEntries.fold(0, (sum, entry) => sum + entry.calories),
-    caloriesOut: activityEntries.fold(
-      0,
-      (sum, entry) => sum + entry.caloriesBurned.round(),
-    ),
+    items: plan.timelineItems,
+    completedTasks: plan.completedTasks,
+    totalTasks: plan.totalTasks,
+    waterMl: plan.waterMl,
+    waterGoalMl: plan.waterGoalMl,
+    caloriesIn: plan.caloriesIn,
+    caloriesOut: plan.caloriesOut,
   );
 });
 
@@ -449,6 +476,7 @@ int _timeToMinutes(String value) {
 
 void invalidateDashboardData(WidgetRef ref) {
   ref.invalidate(dashboardSummaryProvider);
+  ref.invalidate(dayPlanProvider);
   ref.invalidate(homeDashboardProvider);
   ref.invalidate(homeTimelineProvider);
   ref.invalidate(todosProvider);
@@ -467,11 +495,14 @@ void invalidateHabitData(WidgetRef ref) {
   ref.invalidate(habitsProvider);
   ref.invalidate(todayHabitEntriesProvider);
   ref.invalidate(weeklyHabitSummaryProvider);
+  ref.invalidate(dayPlanProvider);
+  ref.invalidate(homeTimelineProvider);
 }
 
 void invalidateUserScopedData(WidgetRef ref) {
   ref.invalidate(homeDashboardProvider);
   ref.invalidate(homeTimelineProvider);
+  ref.invalidate(dayPlanProvider);
   ref.invalidate(scheduleBlocksProvider);
   ref.invalidate(todosProvider);
   ref.invalidate(recurringTasksProvider);

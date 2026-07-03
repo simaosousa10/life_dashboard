@@ -1,5 +1,6 @@
 import '../../core/constants/app_constants.dart';
 import '../../data/models/calendar_event.dart';
+import '../../data/models/habit.dart';
 import '../../data/models/schedule_block.dart';
 import '../../data/models/today_timeline_item.dart';
 import '../../data/models/todo_item.dart';
@@ -9,6 +10,7 @@ List<TodayTimelineItem> buildTodayTimelineItems({
   required List<ScheduleBlock> scheduleBlocks,
   required List<CalendarEvent> events,
   required List<TodoItem> todos,
+  List<TodayHabitEntry> habits = const [],
 }) {
   final dateKey = formatDateKey(date);
   final items = <TodayTimelineItem>[];
@@ -43,9 +45,14 @@ List<TodayTimelineItem> buildTodayTimelineItems({
         title: event.title,
         description: event.description,
         category: _titleCase(event.category),
-        start: date,
+        start: event.startTime == null
+            ? date
+            : combineDateAndTime(date, event.startTime!),
+        end: event.endTime == null
+            ? null
+            : combineDateAndTime(date, event.endTime!),
         type: TodayItemType.calendarEvent,
-        hasTime: false,
+        hasTime: event.startTime != null,
       ),
     );
   }
@@ -65,8 +72,31 @@ List<TodayTimelineItem> buildTodayTimelineItems({
         description: todo.description,
         category: 'Tarefa ${_titleCase(todo.priority)}',
         start: hasTime ? combineDateAndTime(date, todo.dueTime!) : date,
-        type: TodayItemType.todo,
+        type: todo.recurringTaskId == null
+            ? TodayItemType.todo
+            : TodayItemType.recurringTask,
         hasTime: hasTime,
+        isCompleted: todo.isCompleted,
+      ),
+    );
+  }
+
+  for (final entry in habits) {
+    if (entry.log?.isCompleted == true) {
+      continue;
+    }
+
+    final habit = entry.habit;
+    items.add(
+      TodayTimelineItem(
+        id: habit.id,
+        title: habit.title,
+        description: habit.description,
+        category: habit.category ?? habit.targetType.label,
+        start: date,
+        type: TodayItemType.habit,
+        hasTime: false,
+        isCompleted: entry.log?.isCompleted ?? false,
       ),
     );
   }
@@ -114,6 +144,10 @@ List<TodayTimelineItem> upcomingTimelineItems(
       }
       if (item.type == TodayItemType.todo) {
         return true;
+      }
+      if (item.type == TodayItemType.recurringTask ||
+          item.type == TodayItemType.habit) {
+        return !item.isCompleted;
       }
       if (!item.hasTime) {
         return true;

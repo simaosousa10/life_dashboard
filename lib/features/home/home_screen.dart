@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/constants/app_constants.dart';
 import '../../core/widgets/app_async_value.dart';
-import '../../data/models/today_timeline_item.dart';
+import '../../core/widgets/app_snackbars.dart';
+import '../../data/models/day_plan.dart';
+import '../../data/models/todo_item.dart';
 import '../../providers/app_providers.dart';
 import '../dashboard/timeline_helpers.dart';
 import '../dashboard/widgets/current_activity_card.dart';
@@ -18,23 +21,27 @@ class HomeScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final timeline = ref.watch(homeTimelineProvider);
+    final dateKey = formatDateKey(todayDate());
+    final plan = ref.watch(dayPlanProvider(dateKey));
     final now = ref.watch(timelineClockProvider).valueOrNull ?? DateTime.now();
 
     return ColoredBox(
       color: const Color(0xFF10151F),
       child: SafeArea(
         child: AppAsyncValue(
-          value: timeline,
-          onRetry: () => ref.invalidate(homeTimelineProvider),
+          value: plan,
+          onRetry: () => ref.invalidate(dayPlanProvider(dateKey)),
           builder: (data) {
-            final currentItem = currentTimelineItem(data.items, now);
-            final upcomingItems = upcomingTimelineItems(data.items, now);
+            final currentItem = currentTimelineItem(data.timelineItems, now);
+            final upcomingItems = upcomingTimelineItems(
+              data.timelineItems,
+              now,
+            );
 
             return RefreshIndicator(
               color: const Color(0xFFFFA726),
               backgroundColor: const Color(0xFF1F2937),
-              onRefresh: () async => ref.invalidate(homeTimelineProvider),
+              onRefresh: () async => invalidateDashboardData(ref),
               child: ListView(
                 physics: const AlwaysScrollableScrollPhysics(),
                 padding: const EdgeInsets.fromLTRB(20, 22, 20, 28),
@@ -42,7 +49,7 @@ class HomeScreen extends ConsumerWidget {
                   HomeHeader(
                     displayName: data.displayName,
                     date: data.date,
-                    onProfileTap: () => onSelectTab?.call(1),
+                    onProfileTap: () => onSelectTab?.call(4),
                   ),
                   const SizedBox(height: 22),
                   const _SectionTitle('Agora'),
@@ -69,6 +76,10 @@ class HomeScreen extends ConsumerWidget {
                         child: UpcomingActivityCard(item: item),
                       ),
                     ),
+                  const SizedBox(height: 14),
+                  const _SectionTitle('Tarefas de hoje'),
+                  const SizedBox(height: 8),
+                  _TodayTasksCard(tasks: data.todos),
                   const SizedBox(height: 14),
                   const _SectionTitle('Fecho do dia'),
                   const SizedBox(height: 8),
@@ -108,7 +119,7 @@ class _SectionTitle extends StatelessWidget {
 class _DailySummary extends StatelessWidget {
   const _DailySummary({required this.data});
 
-  final TodayTimelineData data;
+  final DayPlanData data;
 
   @override
   Widget build(BuildContext context) {
@@ -129,6 +140,11 @@ class _DailySummary extends StatelessWidget {
               icon: Icons.task_alt,
             ),
             _SummaryTile(
+              label: 'Habitos',
+              value: '${data.completedHabits}/${data.totalHabits}',
+              icon: Icons.fact_check_outlined,
+            ),
+            _SummaryTile(
               label: 'Água',
               value: '${data.waterMl}/${data.waterGoalMl} ml',
               icon: Icons.water_drop_outlined,
@@ -146,6 +162,77 @@ class _DailySummary extends StatelessWidget {
           ],
         );
       },
+    );
+  }
+}
+
+class _TodayTasksCard extends ConsumerWidget {
+  const _TodayTasksCard({required this.tasks});
+
+  final List<TodoItem> tasks;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    if (tasks.isEmpty) {
+      return const EmptyStateCard(
+        icon: Icons.task_alt,
+        message: 'Sem tarefas para hoje',
+      );
+    }
+
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.10)),
+      ),
+      child: Column(
+        children: tasks.take(5).map((task) {
+          return CheckboxListTile(
+            value: task.isCompleted,
+            dense: true,
+            contentPadding: EdgeInsets.zero,
+            controlAffinity: ListTileControlAffinity.leading,
+            activeColor: const Color(0xFFFFA726),
+            checkColor: Colors.black,
+            onChanged: (value) async {
+              try {
+                await ref
+                    .read(todosRepositoryProvider)
+                    .setCompleted(task.id, value ?? false);
+                invalidateDashboardData(ref);
+              } catch (error) {
+                if (context.mounted) {
+                  showErrorSnackBar(context, error);
+                }
+              }
+            },
+            title: Text(
+              task.title,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.w700,
+                decoration: task.isCompleted
+                    ? TextDecoration.lineThrough
+                    : null,
+              ),
+            ),
+            subtitle: Text(
+              [
+                if (task.dueTime != null) compactTime(task.dueTime!),
+                task.priority,
+                if (task.recurringTaskId != null) 'recorrente',
+              ].join(' - '),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(color: Colors.white.withValues(alpha: 0.62)),
+            ),
+          );
+        }).toList(),
+      ),
     );
   }
 }

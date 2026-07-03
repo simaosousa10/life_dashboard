@@ -14,6 +14,8 @@ class UpcomingActivityCard extends StatelessWidget {
       TodayItemType.schedule => Icons.calendar_view_week_outlined,
       TodayItemType.calendarEvent => Icons.event_outlined,
       TodayItemType.todo => Icons.check_circle_outline,
+      TodayItemType.recurringTask => Icons.repeat,
+      TodayItemType.habit => Icons.fact_check_outlined,
     };
 
     return Container(

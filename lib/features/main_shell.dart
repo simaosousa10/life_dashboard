@@ -1,12 +1,11 @@
 import 'package:flutter/material.dart';
 
 import '../core/constants/app_constants.dart';
-import 'calendar/calendar_screen.dart';
+import 'calendar/calendar_hub_screen.dart';
 import 'calories/health_screen.dart';
 import 'home/home_screen.dart';
 import 'notes/notes_screen.dart';
 import 'profile/profile_screen.dart';
-import 'todos/todos_screen.dart';
 
 class MainShell extends StatefulWidget {
   const MainShell({super.key});
@@ -24,22 +23,14 @@ class _MainShellState extends State<MainShell> {
 
   @override
   Widget build(BuildContext context) {
-    final titles = [
-      'Home',
-      'Perfil',
-      'Saude',
-      'Tarefas',
-      'Notas',
-      'Calendario',
-    ];
+    final titles = ['Home', 'Calendario', 'Saude', 'Notas', 'Perfil'];
 
     final pages = [
       HomeScreen(onSelectTab: _selectTab),
-      const ProfileScreen(),
+      const CalendarHubScreen(),
       const HealthScreen(),
-      const TodosScreen(),
       const NotesScreen(),
-      const CalendarScreen(),
+      const ProfileScreen(),
     ];
 
     return Scaffold(
@@ -61,9 +52,9 @@ class _MainShellState extends State<MainShell> {
             label: 'Home',
           ),
           NavigationDestination(
-            icon: Icon(Icons.person_outline),
-            selectedIcon: Icon(Icons.person),
-            label: 'Perfil',
+            icon: Icon(Icons.event_outlined),
+            selectedIcon: Icon(Icons.event),
+            label: 'Calendario',
           ),
           NavigationDestination(
             icon: Icon(Icons.favorite_border),
@@ -71,19 +62,14 @@ class _MainShellState extends State<MainShell> {
             label: 'Saude',
           ),
           NavigationDestination(
-            icon: Icon(Icons.checklist_outlined),
-            selectedIcon: Icon(Icons.checklist),
-            label: 'Tarefas',
-          ),
-          NavigationDestination(
             icon: Icon(Icons.note_alt_outlined),
             selectedIcon: Icon(Icons.note_alt),
             label: 'Notas',
           ),
           NavigationDestination(
-            icon: Icon(Icons.event_outlined),
-            selectedIcon: Icon(Icons.event),
-            label: 'Calendario',
+            icon: Icon(Icons.person_outline),
+            selectedIcon: Icon(Icons.person),
+            label: 'Perfil',
           ),
         ],
       ),

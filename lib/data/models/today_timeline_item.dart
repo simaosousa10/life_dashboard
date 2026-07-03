@@ -30,6 +30,7 @@ class TodayTimelineItem {
     required this.start,
     required this.type,
     required this.hasTime,
+    this.isCompleted = false,
     this.description,
     this.end,
   });
@@ -42,6 +43,7 @@ class TodayTimelineItem {
   final DateTime? end;
   final TodayItemType type;
   final bool hasTime;
+  final bool isCompleted;
 }
 
-enum TodayItemType { schedule, calendarEvent, todo }
+enum TodayItemType { schedule, calendarEvent, todo, recurringTask, habit }
