@@ -3,6 +3,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../core/constants/app_constants.dart';
 import '../models/recurring_task.dart';
 import '../models/recurring_task_exception.dart';
+import '../models/recurring_task_generation.dart';
 import '../models/todo_item.dart';
 import 'repository_utils.dart';
 
@@ -155,60 +156,19 @@ class RecurringTasksRepository {
 
   Future<void> generateTasksForDate(DateTime date) async {
     final day = DateTime(date.year, date.month, date.day);
-    final dateKey = formatDateKey(day);
     final recurringTasks = await list();
     final exceptions = await listExceptionsForDate(day);
     final rescheduledToDate = await listRescheduledToDate(day);
-    final exceptionsByTask = {
-      for (final exception in exceptions) exception.recurringTaskId: exception,
-    };
-    final tasksById = {for (final task in recurringTasks) task.id: task};
-    final applicable = recurringTasks.where((task) {
-      if (!task.appliesTo(day)) {
-        return false;
-      }
-      final exception = exceptionsByTask[task.id];
-      return exception == null ||
-          exception.exceptionType == RecurringTaskExceptionType.modified;
-    }).toList();
+    final rows = buildRecurringTodosForDate(
+      userId: _userId,
+      date: day,
+      tasks: recurringTasks,
+      exceptions: exceptions,
+      rescheduledToDate: rescheduledToDate,
+    ).map((todo) => todo.toMap()).toList();
 
-    if (applicable.isEmpty && rescheduledToDate.isEmpty) {
+    if (rows.isEmpty) {
       return;
-    }
-
-    final rows = applicable.map((task) {
-      final exception = exceptionsByTask[task.id];
-      return {
-        'user_id': _userId,
-        'recurring_task_id': task.id,
-        'title': task.title,
-        'description': task.description,
-        'due_date': dateKey,
-        'due_time': exception?.newTime ?? task.time,
-        'priority': task.priority,
-        'is_completed': false,
-      };
-    }).toList();
-
-    for (final exception in rescheduledToDate) {
-      if (exception.exceptionType != RecurringTaskExceptionType.reschedule ||
-          exception.newDueDate == null) {
-        continue;
-      }
-      final task = tasksById[exception.recurringTaskId];
-      if (task == null) {
-        continue;
-      }
-      rows.add({
-        'user_id': _userId,
-        'recurring_task_id': task.id,
-        'title': task.title,
-        'description': task.description,
-        'due_date': formatDateKey(exception.newDueDate!),
-        'due_time': exception.newTime ?? task.time,
-        'priority': task.priority,
-        'is_completed': false,
-      });
     }
 
     await _client

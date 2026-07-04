@@ -205,6 +205,9 @@ class HabitLogInput {
   final double? value;
   final String? note;
 
+  String conflictKey(String userId) =>
+      habitLogConflictKey(userId: userId, habitId: habitId, date: date);
+
   Map<String, dynamic> toMap(String userId) => {
     'user_id': userId,
     'habit_id': habitId,
@@ -214,6 +217,14 @@ class HabitLogInput {
     'note': note,
     'updated_at': DateTime.now().toUtc().toIso8601String(),
   };
+}
+
+String habitLogConflictKey({
+  required String userId,
+  required String habitId,
+  required DateTime date,
+}) {
+  return '$userId|$habitId|${formatDateKey(date)}';
 }
 
 class TodayHabitEntry {

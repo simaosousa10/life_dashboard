@@ -14,8 +14,9 @@ class AuthGate extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     ref.listen(authStateProvider, (previous, next) {
-      final user = next.valueOrNull?.session?.user;
-      if (next.hasValue && user == null) {
+      final previousUserId = previous?.valueOrNull?.session?.user.id;
+      final nextUserId = next.valueOrNull?.session?.user.id;
+      if (next.hasValue && previousUserId != nextUserId) {
         invalidateUserScopedData(ref);
       }
     });
@@ -26,8 +27,9 @@ class AuthGate extends ConsumerWidget {
     if (user != null) {
       final profile = ref.watch(userProfileProvider);
       return profile.when(
-        data: (data) =>
-            data == null ? const OnboardingScreen() : const MainShell(),
+        data: (data) => data == null || data.needsOnboarding
+            ? OnboardingScreen(initialProfile: data)
+            : const MainShell(),
         loading: () =>
             const Scaffold(body: Center(child: CircularProgressIndicator())),
         error: (error, _) => Scaffold(

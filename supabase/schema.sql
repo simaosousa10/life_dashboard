@@ -7,6 +7,7 @@ create table if not exists public.profiles (
   weight_kg numeric(6, 2) not null default 70 check (weight_kg > 0),
   daily_water_goal_ml integer not null default 2000 check (daily_water_goal_ml > 0),
   daily_calorie_goal integer not null default 2200 check (daily_calorie_goal > 0),
+  onboarding_completed boolean not null default true,
   created_at timestamptz not null default now()
 );
 

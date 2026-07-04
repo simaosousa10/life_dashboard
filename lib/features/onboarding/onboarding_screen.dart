@@ -10,7 +10,9 @@ import '../../data/models/user_profile.dart';
 import '../../providers/app_providers.dart';
 
 class OnboardingScreen extends ConsumerStatefulWidget {
-  const OnboardingScreen({super.key});
+  const OnboardingScreen({super.key, this.initialProfile});
+
+  final UserProfile? initialProfile;
 
   @override
   ConsumerState<OnboardingScreen> createState() => _OnboardingScreenState();
@@ -30,7 +32,14 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
   void initState() {
     super.initState();
     final email = ref.read(currentUserProvider)?.email;
-    _nameController.text = email?.split('@').first ?? '';
+    final profile = widget.initialProfile;
+    _nameController.text =
+        profile?.displayName ?? email?.split('@').first ?? '';
+    if (profile != null) {
+      _weightController.text = profile.weightKg.toString();
+      _waterGoalController.text = profile.dailyWaterGoalMl.toString();
+      _calorieGoalController.text = profile.dailyCalorieGoal.toString();
+    }
   }
 
   @override
