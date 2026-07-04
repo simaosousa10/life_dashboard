@@ -38,8 +38,8 @@ class _WaterScreenState extends ConsumerState<WaterScreen> {
           .read(waterRepositoryProvider)
           .add(WaterEntryInput(amountMl: amountMl, date: _date));
       ref.invalidate(waterEntriesProvider(formatDateKey(_date)));
-      ref.invalidate(dashboardSummaryProvider);
-      ref.invalidate(homeTimelineProvider);
+      ref.invalidate(dayPlanProvider);
+      ref.invalidate(weeklyReviewProvider);
     } catch (error) {
       if (showSnack && mounted) {
         showErrorSnackBar(context, error);
@@ -66,8 +66,8 @@ class _WaterScreenState extends ConsumerState<WaterScreen> {
         return RefreshIndicator(
           onRefresh: () async {
             ref.invalidate(waterEntriesProvider(dateKey));
-            ref.invalidate(dashboardSummaryProvider);
-            ref.invalidate(homeTimelineProvider);
+            ref.invalidate(dayPlanProvider);
+            ref.invalidate(weeklyReviewProvider);
           },
           child: ListView(
             padding: const EdgeInsets.all(16),
@@ -134,8 +134,8 @@ class _WaterScreenState extends ConsumerState<WaterScreen> {
                                 .read(waterRepositoryProvider)
                                 .delete(entry.id);
                             ref.invalidate(waterEntriesProvider(dateKey));
-                            ref.invalidate(dashboardSummaryProvider);
-                            ref.invalidate(homeTimelineProvider);
+                            ref.invalidate(dayPlanProvider);
+                            ref.invalidate(weeklyReviewProvider);
                           } catch (error) {
                             if (context.mounted) {
                               showErrorSnackBar(context, error);

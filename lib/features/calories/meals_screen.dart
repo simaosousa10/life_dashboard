@@ -51,8 +51,8 @@ class _MealsScreenState extends ConsumerState<MealsScreen> {
         return RefreshIndicator(
           onRefresh: () async {
             ref.invalidate(mealEntriesProvider(dateKey));
-            ref.invalidate(dashboardSummaryProvider);
-            ref.invalidate(homeTimelineProvider);
+            ref.invalidate(dayPlanProvider);
+            ref.invalidate(weeklyReviewProvider);
           },
           child: ListView(
             padding: const EdgeInsets.all(16),
@@ -107,8 +107,8 @@ class _MealsScreenState extends ConsumerState<MealsScreen> {
                                   .read(mealsRepositoryProvider)
                                   .delete(item.id);
                               ref.invalidate(mealEntriesProvider(dateKey));
-                              ref.invalidate(dashboardSummaryProvider);
-                              ref.invalidate(homeTimelineProvider);
+                              ref.invalidate(dayPlanProvider);
+                              ref.invalidate(weeklyReviewProvider);
                             } catch (error) {
                               if (context.mounted) {
                                 showErrorSnackBar(context, error);
@@ -153,8 +153,8 @@ class _MealsScreenState extends ConsumerState<MealsScreen> {
             await repository.update(meal.id, input);
           }
           ref.invalidate(mealEntriesProvider(dateKey));
-          ref.invalidate(dashboardSummaryProvider);
-          ref.invalidate(homeTimelineProvider);
+          ref.invalidate(dayPlanProvider);
+          ref.invalidate(weeklyReviewProvider);
         },
       ),
     );

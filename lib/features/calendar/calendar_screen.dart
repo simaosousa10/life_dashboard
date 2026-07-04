@@ -8,6 +8,7 @@ import '../../core/widgets/empty_state.dart';
 import '../../data/models/calendar_event.dart';
 import '../../data/models/model_helpers.dart';
 import '../../data/models/recurring_task.dart';
+import '../../data/models/recurring_task_exception.dart';
 import '../../data/models/schedule_block.dart';
 import '../../data/models/todo_item.dart';
 import '../../providers/app_providers.dart';
@@ -39,13 +40,26 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
     final events = ref.watch(calendarEventsProvider);
     final todos = ref.watch(todosProvider);
     final recurringTasks = ref.watch(recurringTasksProvider);
+    final monthKey = formatDateKey(
+      DateTime(_visibleMonth.year, _visibleMonth.month),
+    );
+    final recurringExceptions = ref.watch(
+      recurringTaskExceptionsProvider(monthKey),
+    );
 
-    final firstError = _firstError([schedule, events, todos, recurringTasks]);
+    final firstError = _firstError([
+      schedule,
+      events,
+      todos,
+      recurringTasks,
+      recurringExceptions,
+    ]);
     final isLoading =
         schedule.isLoading ||
         events.isLoading ||
         todos.isLoading ||
-        recurringTasks.isLoading;
+        recurringTasks.isLoading ||
+        recurringExceptions.isLoading;
 
     return Scaffold(
       body: RefreshIndicator(
@@ -72,6 +86,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                   events.valueOrNull ?? const [],
                   todos.valueOrNull ?? const [],
                   recurringTasks.valueOrNull ?? const [],
+                  recurringExceptions.valueOrNull ?? const [],
                 ),
                 onPreviousMonth: () {
                   setState(() {
@@ -107,6 +122,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
               events: events.valueOrNull ?? const [],
               todos: todos.valueOrNull ?? const [],
               recurringTasks: recurringTasks.valueOrNull ?? const [],
+              recurringExceptions: recurringExceptions.valueOrNull ?? const [],
               onTap: firstError == null
                   ? () {
                       _openDayBottomSheet(
@@ -144,8 +160,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
           .generateTasksForDate(date);
       visibleTodos = await ref.read(todosRepositoryProvider).list();
       ref.invalidate(todosProvider);
-      ref.invalidate(homeTimelineProvider);
-      ref.invalidate(dashboardSummaryProvider);
+      ref.invalidate(dayPlanProvider);
     } catch (error) {
       if (context.mounted) {
         showErrorSnackBar(context, error);
@@ -218,6 +233,7 @@ class _SelectedDayPreview extends StatelessWidget {
     required this.events,
     required this.todos,
     required this.recurringTasks,
+    required this.recurringExceptions,
     required this.onTap,
   });
 
@@ -226,6 +242,7 @@ class _SelectedDayPreview extends StatelessWidget {
   final List<CalendarEvent> events;
   final List<TodoItem> todos;
   final List<RecurringTask> recurringTasks;
+  final List<RecurringTaskException> recurringExceptions;
   final VoidCallback? onTap;
 
   @override
@@ -236,6 +253,7 @@ class _SelectedDayPreview extends StatelessWidget {
       events,
       todos,
       recurringTasks,
+      recurringExceptions,
     );
 
     return Card(
@@ -525,6 +543,7 @@ bool _hasItemsForDate(
   List<CalendarEvent> events,
   List<TodoItem> todos,
   List<RecurringTask> recurringTasks,
+  List<RecurringTaskException> recurringExceptions,
 ) {
   return _itemCountForDate(
         date,
@@ -532,6 +551,7 @@ bool _hasItemsForDate(
         events,
         todos,
         recurringTasks,
+        recurringExceptions,
       ) >
       0;
 }
@@ -542,6 +562,7 @@ int _itemCountForDate(
   List<CalendarEvent> events,
   List<TodoItem> todos,
   List<RecurringTask> recurringTasks,
+  List<RecurringTaskException> recurringExceptions,
 ) {
   final dateKey = formatDateKey(date);
   final scheduleCount = scheduleBlocks
@@ -565,11 +586,34 @@ int _itemCountForDate(
       )
       .map((todo) => todo.recurringTaskId!)
       .toSet();
-  final recurringCount = recurringTasks
+  final exceptionsOnDate = recurringExceptions
+      .where((exception) => formatDateKey(exception.date) == dateKey)
+      .toList();
+  final exceptionsByTask = {
+    for (final exception in exceptionsOnDate)
+      exception.recurringTaskId: exception,
+  };
+  final rescheduledToDateIds = recurringExceptions
       .where(
-        (task) =>
-            task.appliesTo(date) && !generatedRecurringIds.contains(task.id),
+        (exception) =>
+            exception.exceptionType == RecurringTaskExceptionType.reschedule &&
+            exception.newDueDate != null &&
+            formatDateKey(exception.newDueDate!) == dateKey &&
+            !generatedRecurringIds.contains(exception.recurringTaskId),
       )
-      .length;
-  return scheduleCount + eventCount + todoCount + recurringCount;
+      .map((exception) => exception.recurringTaskId)
+      .toSet();
+  final recurringCount = recurringTasks.where((task) {
+    final exception = exceptionsByTask[task.id];
+    if (!task.appliesTo(date) || generatedRecurringIds.contains(task.id)) {
+      return false;
+    }
+    return exception == null ||
+        exception.exceptionType == RecurringTaskExceptionType.modified;
+  }).length;
+  return scheduleCount +
+      eventCount +
+      todoCount +
+      recurringCount +
+      rescheduledToDateIds.length;
 }

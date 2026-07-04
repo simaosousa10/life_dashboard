@@ -1,27 +1,3 @@
-class TodayTimelineData {
-  const TodayTimelineData({
-    required this.displayName,
-    required this.date,
-    required this.items,
-    required this.completedTasks,
-    required this.totalTasks,
-    required this.waterMl,
-    required this.waterGoalMl,
-    required this.caloriesIn,
-    required this.caloriesOut,
-  });
-
-  final String displayName;
-  final DateTime date;
-  final List<TodayTimelineItem> items;
-  final int completedTasks;
-  final int totalTasks;
-  final int waterMl;
-  final int waterGoalMl;
-  final int caloriesIn;
-  final int caloriesOut;
-}
-
 class TodayTimelineItem {
   const TodayTimelineItem({
     required this.id,

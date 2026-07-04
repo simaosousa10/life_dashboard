@@ -51,8 +51,8 @@ class _ActivitiesScreenState extends ConsumerState<ActivitiesScreen> {
         return RefreshIndicator(
           onRefresh: () async {
             ref.invalidate(activityEntriesProvider(dateKey));
-            ref.invalidate(dashboardSummaryProvider);
-            ref.invalidate(homeTimelineProvider);
+            ref.invalidate(dayPlanProvider);
+            ref.invalidate(weeklyReviewProvider);
           },
           child: ListView(
             padding: const EdgeInsets.all(16),
@@ -111,8 +111,8 @@ class _ActivitiesScreenState extends ConsumerState<ActivitiesScreen> {
                                   .read(activitiesRepositoryProvider)
                                   .delete(item.id);
                               ref.invalidate(activityEntriesProvider(dateKey));
-                              ref.invalidate(dashboardSummaryProvider);
-                              ref.invalidate(homeTimelineProvider);
+                              ref.invalidate(dayPlanProvider);
+                              ref.invalidate(weeklyReviewProvider);
                             } catch (error) {
                               if (context.mounted) {
                                 showErrorSnackBar(context, error);
@@ -159,8 +159,8 @@ class _ActivitiesScreenState extends ConsumerState<ActivitiesScreen> {
             await repository.update(activity.id, input);
           }
           ref.invalidate(activityEntriesProvider(dateKey));
-          ref.invalidate(dashboardSummaryProvider);
-          ref.invalidate(homeTimelineProvider);
+          ref.invalidate(dayPlanProvider);
+          ref.invalidate(weeklyReviewProvider);
         },
       ),
     );

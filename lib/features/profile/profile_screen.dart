@@ -154,10 +154,7 @@ class ProfileScreen extends ConsumerWidget {
         user: user,
         onSubmit: (input) async {
           await ref.read(profileRepositoryProvider).save(input);
-          ref.invalidate(userProfileProvider);
-          ref.invalidate(homeDashboardProvider);
-          ref.invalidate(homeTimelineProvider);
-          ref.invalidate(dashboardSummaryProvider);
+          invalidateUserScopedData(ref);
         },
       ),
     );

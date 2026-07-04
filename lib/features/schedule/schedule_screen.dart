@@ -55,7 +55,7 @@ class ScheduleScreen extends ConsumerWidget {
                                 .read(scheduleRepositoryProvider)
                                 .delete(item.id);
                             ref.invalidate(scheduleBlocksProvider);
-                            ref.invalidate(homeTimelineProvider);
+                            ref.invalidate(dayPlanProvider);
                           } catch (error) {
                             if (context.mounted) {
                               showErrorSnackBar(context, error);
@@ -100,7 +100,7 @@ class ScheduleScreen extends ConsumerWidget {
             await repository.update(block.id, input);
           }
           ref.invalidate(scheduleBlocksProvider);
-          ref.invalidate(homeTimelineProvider);
+          ref.invalidate(dayPlanProvider);
         },
       ),
     );

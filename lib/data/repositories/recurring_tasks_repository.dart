@@ -70,6 +70,34 @@ class RecurringTasksRepository {
     return rows.map(RecurringTaskException.fromMap).toList();
   }
 
+  Future<List<RecurringTaskException>> listExceptionsForRange(
+    DateTime start,
+    DateTime end,
+  ) async {
+    final startKey = formatDateKey(start);
+    final endKey = formatDateKey(end);
+    final byOriginalDate = await _client
+        .from('recurring_task_exceptions')
+        .select()
+        .eq('user_id', _userId)
+        .gte('date', startKey)
+        .lte('date', endKey);
+    final byNewDueDate = await _client
+        .from('recurring_task_exceptions')
+        .select()
+        .eq('user_id', _userId)
+        .gte('new_due_date', startKey)
+        .lte('new_due_date', endKey);
+
+    final byId = <String, RecurringTaskException>{
+      for (final row in byOriginalDate.map(RecurringTaskException.fromMap))
+        row.id: row,
+      for (final row in byNewDueDate.map(RecurringTaskException.fromMap))
+        row.id: row,
+    };
+    return byId.values.toList();
+  }
+
   Future<void> skipOccurrence({
     required String recurringTaskId,
     required DateTime date,

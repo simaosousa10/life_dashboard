@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/utils/app_error.dart';
+import '../../core/widgets/error_state.dart';
 import '../../providers/app_providers.dart';
 import '../main_shell.dart';
 import '../onboarding/onboarding_screen.dart';
@@ -28,7 +30,12 @@ class AuthGate extends ConsumerWidget {
             data == null ? const OnboardingScreen() : const MainShell(),
         loading: () =>
             const Scaffold(body: Center(child: CircularProgressIndicator())),
-        error: (_, _) => const OnboardingScreen(),
+        error: (error, _) => Scaffold(
+          body: ErrorState(
+            message: friendlyErrorMessage(error),
+            onRetry: () => ref.invalidate(userProfileProvider),
+          ),
+        ),
       );
     }
 
